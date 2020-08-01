@@ -1,6 +1,7 @@
 { sources ? import ./nix/sources.nix }:
 
 let
+  thisRepository = import ./overlay.nix;
   rustChannelsOverlay = import "${sources.nixpkgs-mozilla}/rust-overlay.nix";
   rustChannelsSrcOverlay = import "${sources.nixpkgs-mozilla}/rust-src-overlay.nix";
 
@@ -31,6 +32,7 @@ import sources.nixpkgs {
       rustChannelsOverlay
       rustChannelsSrcOverlay
       rustOverlay
+      thisRepository
   ];
 }
 
