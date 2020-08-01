@@ -1,4 +1,4 @@
-# `crashcart` - microcontainer debugging tool #
+# `crashcart` - container debugging tool #
 
 ![crashcart](https://github.com/oracle/crashcart/raw/master/crashcart.png
 "crashcart")
