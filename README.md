@@ -15,6 +15,7 @@ Building can be done via nix:
     nix build -f ./nixpkgs.nix crashcart
 
 To put crashcart on path:
+
     nix run -f ./nixpkgs.nix crashcart
 
 ## Building `crashcart.img` ##
