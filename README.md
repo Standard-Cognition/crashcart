@@ -10,107 +10,67 @@ with linux binaries into an existing container.
 
 ## Building `crashcart` ##
 
-[![wercker status](https://app.wercker.com/status/3b1da922588f5550faca49a356013e52/s/master "wercker status")](https://app.wercker.com/project/byKey/3b1da922588f5550faca49a356013e52)
+Building can be done via nix:
 
-Install rust:
+    nix build -f ./nixpkgs.nix crashcart
 
-    curl https://sh.rustup.rs -sSf | sh
-    rustup toolchain install stable-x86_64-unknown-linux-gnu
-    rustup default stable-x86_64-unknown-linux-gnu # for stable
-    rustup target install x86_64-unknown-linux-musl # for stable
-    rustup toolchain install nightly-x86_64-unknown-linux-gnu
-    rustup default nightly-x86_64-unknown-linux-gnu # for nightly
-    rustup target install x86_64-unknown-linux-musl # for nightly
-
-Building can be done via build.sh:
-
-    build.sh
-
-By default, build.sh builds a dynamic binary using gnu. To build a static
-binary, set `TARGET` to `x86_64-unknown-linux-musl`:
-
-    TARGET=x86_64-unknown-linux-musl ./build.sh
+To put crashcart on path:
+    nix run -f ./nixpkgs.nix crashcart
 
 ## Building `crashcart.img` ##
 
 Image build dependencies:
 
     sudo
+    nix
     docker
 
 `crashcart` will load binaries from an image file into a running container. To
 build the image, you just need docker installed and then you can use
-build_image.sh:
+`build_image.sh`:
 
     build_image.sh
 
 The build image script will build a `crashcart_builder` image using the
-dockerfile in the builder directory. It will then run this builder as a
+nix image defined in the builder directory. It will then run this builder as a
 privileged container. It needs to be privileged because the image is created by
 loopback mounting an ext3 filesystem and copying files in. It may be possible
-to do this without root privileges using something like e2tools, but these have
-not been packaged for alpine.
+to do this without root privileges using something like e2tools, but this has
+yet to be tested.
 
 The `crashcart_builder` will take a very long time the first time it is run.
-The relocated binaries are built from source via the nix package manager, and
-the toolchain needs to be built from scratch. Later builds should go much more
-quickly because the nix store is cached in a in the vol directory and bind
-mounted into the builder.
+The relocated binaries are built from source via the nix package manager. To prevent
+binary collisions, the toolchain is built under a non standard prefix. As a result
+nix cannot exploit any upstream build caches. Later builds should go much more quickly
+because the nix store is cached in a in the vol directory and bind mounted into the builder.
 
-To add to the list of packages in the resulting image, simply add the package
-names to the packages file before building. Packages are installed via the
-nix-env tool. An up-to-date list of nix packages can be searched
-[here](https://nixos.org/nixos/packages.html).
+To add to the list of packages in the resulting image, simply extend the buildEnv in `vol/tools.nix`.
 
 ## Using `crashcart` ##
 
-To enter a container and run `crashcart`'s bash just pass the container id:
+To run a command from the `crashcart` image, pass the full path:
 
-    sudo ./crashcart $ID
+    sudo ./crashcart $PID /dev/crashcart/bin/tcpdump
 
-$ID can be the container id of a `docker` or `rkt` container, or the pid of any
-process running inside a container.
-
-To run another command from the `crashcart` image, pass the full path:
-
-    sudo ./crashcart $ID /dev/crashcart/bin/tcpdump
-
-To use docker-exec instead of entering the namespaces via `crashcart`'s
-internal namespace handling, use the -e flag (NOTE: that this requires $ID to be
-a docker container id):
-
-    sudo ./crashcart -e $ID
+Where PID is the process ID of the container. You can retrieve the PID by running
+docker inspect -f "{{.State.Pid}}" <id of running container>`
 
 ## Manually Running Binaries from the `crashcart` Image ##
 
 To manually mount the `crashcart` image into a container, use the -m flag.
 
-    sudo ./crashcart -m $ID
+    sudo ./crashcart -m $PID
 
 To manually unmount the `crashcart` image from a container, use the -u flag.
 
-    sudo ./crashcart -u $ID
+    sudo ./crashcart -u $PID
 
 Once you have manually mounted the image, you can use `docker exec` or
 `nsenter` to run things inside the container.  `crashcart` locates its binaries
 in `/dev/crashcart/bin` or `/dev/crashcart/sbin`. To execute
-`tcpdump` for example, you can use:
+`tcpdump` for example, you can use (assuming you have added it to the `buildEnv`):
 
     docker exec -it $CONTAINER_ID /dev/crashcart/bin/tcpdump
-
-To run a shell with the all of `crashcart`'s utilities available in the path, you
-can use:
-
-    docker exec -it $CONTAINER_ID -- \
-    /dev/crashcart/profile/bin/bash --rcfile /dev/crashcart/.crashcartrc -i
-
-You can also do an equivalent command using `nsenter`:
-
-    sudo nsenter -m -u -i -n -p -t $PID -- \
-    /dev/crashcart/profile/bin/bash --rcfile /dev/crashcart/.crashcartrc -i
-
-Note that if you are using user namespaces you might have to specify -U. You
-also can use -S and -G to use a different user or group id in the container.
 
 `crashcart` leaves the image mounted as a loopback device. If there are no
 containers still using the `crashcart` image, you can remove the device as
@@ -126,31 +86,7 @@ namespace that is a child of a user namespace, the kernel returns EPERM. The
 logic was changed in 4.8 so that it is possible as long as the caller of mount
 is in the init userns.
 
-## TODO ##
-
-* add functionality to run image with crashcart mount using docker run -v
-* temporarily remount /dev in the container rw if it is ro
-* allow user to set uid and gid in the container
-
-## Contributing ##
-
-`crashcart` is an open source project. See [CONTRIBUTING](CONTRIBUTING.md) for
-details.
-
-Oracle gratefully acknowledges the contributions to `crashcart` that have been made
-by the community.
-
-## Getting in touch ##
-
-The best way to get in touch is Slack.
-
-Click [here](https://join.slack.com/t/oraclecontainertools/shared_invite/enQtMzIwNzg3NDIzMzE5LTIwMjZlODllMWRmNjMwZGM1NGNjMThlZjg3ZmU3NDY1ZWU5ZGJmZWFkOTBjNzk0ODIxNzQ2ODUyNThiNmE0MmI) to join the the [Oracle Container Tools workspace](https://oraclecontainertools.slack.com).
-
-Then join the [Crashcart channel](https://oraclecontainertools.slack.com/messages/C8CJ5M9ML).
-
 ## License ##
-
-Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
 
 `crashcart` is dual licensed under the Universal Permissive License 1.0 and the
 Apache License 2.0.
